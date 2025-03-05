@@ -10,6 +10,7 @@ const log = require('./lib/log');
 
 const pathToRoot = process.cwd();
 const pathToPackage = argv.pathToPackage || `${pathToRoot}/package.json`;
+const pathToApp = argv.pathToApp || `${pathToRoot}/app.json`;
 const info = helpers.getPackageInfo(pathToPackage);
 
 const pathToPlist = argv.pathToPlist || `${pathToRoot}/ios/${info.name}/Info.plist`;
@@ -17,13 +18,23 @@ const pathToGradle = argv.pathToGradle || `${pathToRoot}/android/app/build.gradl
 // handle case of several plist files
 const pathsToPlists = Array.isArray(pathToPlist) ? pathToPlist : [pathToPlist];
 
-
 // getting next version
 const versionCurrent = info.version;
 const versions = helpers.versions(versionCurrent);
-let major = helpers.version(versions[0], argv.major);
-let minor = helpers.version(versions[1], argv.minor, argv.major);
-let patch = helpers.version(versions[2], argv.patch, argv.major || argv.minor);
+let major = parseInt(versions[0], 10);
+let minor = parseInt(versions[1], 10);
+let patch = parseInt(versions[2], 10);
+
+if (argv._.includes('--major')) {
+  major += 1;
+  minor = 0;
+  patch = 0;
+} else if (argv._.includes('--minor')) {
+  minor += 1;
+  patch = 0;
+} else if (argv._.includes('--patch')) {
+  patch += 1;
+}
 const version = `${major}.${minor}.${patch}`;
 
 // getting next build number
@@ -31,7 +42,8 @@ const buildCurrent = helpers.getBuildNumberFromPlist(pathsToPlists[0]);
 const build = buildCurrent + 1;
 
 // getting commit message
-const messageTemplate = argv.m || argv.message || 'release ${version}: increase versions and build numbers';
+const commitPrefix = argv._.includes('--commit-prefix') ? argv._[argv._.indexOf('--commit-prefix') + 1] : '';
+const messageTemplate = argv.m || argv.message || `${commitPrefix ? commitPrefix+':': ''} release ${version}`;
 const message = messageTemplate.replace('${version}', version);
 
 log.info('\nI\'m going to increase the version in:');
@@ -69,6 +81,9 @@ const update = chain.then(() => {
 
   helpers.changeVersionInPackage(pathToPackage, version);
   log.success(`Version in package.json changed.`, 2);
+
+  helpers.changeVersionInPackage(pathToApp, version);
+  log.success(`Version in app.json changed.`, 2);
 }).then(() => {
   log.info('Updating version in xcode project...', 1);
 
